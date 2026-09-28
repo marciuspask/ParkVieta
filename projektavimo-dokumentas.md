@@ -183,6 +183,11 @@ Rengdamas šį dokumentą naudojau AI.
 
 **Ar AI bus sistemos funkcionalumo dalis:** Ne. Pagrindinis modulis veikia pagal deterministines taisykles.
 
+**Rizikos, kurias matau naudojant AI:**
+- AI sugeneruotas kodas gali atrodyti teisingas, bet netenkinti ribinių atvejų (pvz., neteisingai elgtis, kai vienodas atstumas iki įėjimo arba kai zona pilna). Mažinsiu tai testais, parašytais pagal 3 skyriaus scenarijus prieš priimant realizaciją.
+- AI gali praleisti `tenant_id` filtrą ir taip sukurti klientų duomenų nutekėjimo spragą. Mažinsiu tai bendra saugyklos bazine klase ir atskirais izoliacijos testais.
+- AI gali pasiūlyti per sudėtingą sprendimą (papildomų abstrakcijų, bibliotekų), kurio nereikia. Laikysiuosi paprastumo principo ir nepriimsiu kodo, kurio negaliu paaiškinti.
+
 ## 7. Tolesnių darbų planas
 
 | Darbas | Apčiuopiamas rezultatas | Planuojama darbų seka |
