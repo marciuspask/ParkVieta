@@ -26,15 +26,15 @@ TENANT_A = "biuru-centras-a"
 TENANT_B = "prekybos-centras-b"
 TS = datetime(2026, 11, 10, 8, 15)
 
-pytestmark = pytest.mark.skipif(
-    not os.getenv("TEST_DATABASE_URL"),
-    reason="TEST_DATABASE_URL not set – requires PostgreSQL test database",
-)
-
-
 @pytest.fixture(scope="module")
 def db_engine():
-    engine = create_engine(os.environ["TEST_DATABASE_URL"])
+    url = os.environ.get("TEST_DATABASE_URL")
+    if not url:
+        pytest.fail(
+            "TEST_DATABASE_URL is not set. "
+            "Copy .env.example to .env and run: docker compose up -d"
+        )
+    engine = create_engine(url)
     Base.metadata.create_all(engine)
     yield engine
     Base.metadata.drop_all(engine)
