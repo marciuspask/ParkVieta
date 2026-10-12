@@ -22,6 +22,7 @@ class EventType(str, Enum):
 
 class AllocationStatus(str, Enum):
     ASSIGNED = "ASSIGNED"
+    RELEASED = "RELEASED"
     REJECTED = "REJECTED"
 
 

@@ -42,7 +42,7 @@ class ParkingAllocationService:
         self._repository.mark_spot_free(parking.spot_id)
         self._repository.remove_active_parking(event.plate)
         return AllocationResult(
-            status=AllocationStatus.ASSIGNED,
+            status=AllocationStatus.RELEASED,
             zone=parking.zone_id,
             spot=parking.spot_id,
             free_in_zone=self._repository.count_free_spots(parking.zone_id),
@@ -68,8 +68,9 @@ class ParkingAllocationService:
             has_disability_permit=event.has_disability_permit,
         )
         spot, is_alternative = self._assign_spot(vehicle, event.preferred_zone)
+        while not self._repository.claim_spot(spot.spot_id):
+            spot, is_alternative = self._assign_spot(vehicle, event.preferred_zone)
 
-        self._repository.mark_spot_occupied(spot.spot_id)
         self._repository.save_active_parking(
             ActiveParking(plate=event.plate, spot_id=spot.spot_id, zone_id=spot.zone_id)
         )
@@ -107,10 +108,17 @@ class ParkingAllocationService:
             and ELIGIBILITY_RULES[s.spot_type].is_eligible(vehicle, s)
         ]
         if preferred:
-            return min(preferred, key=lambda s: (s.distance_to_entrance, s.spot_id))
+            return self._nearest(preferred)
 
         standard = [s for s in free_spots if s.spot_type == SpotType.STANDARD]
         if standard:
-            return min(standard, key=lambda s: (s.distance_to_entrance, s.spot_id))
+            return self._nearest(standard)
 
         return None
+
+    @staticmethod
+    def _nearest(spots: list[Spot]) -> Spot:
+        return min(
+            spots,
+            key=lambda s: (s.distance_to_entrance, int(s.spot_id.split("-")[-1])),
+        )

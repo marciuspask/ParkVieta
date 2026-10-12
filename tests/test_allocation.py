@@ -196,7 +196,7 @@ def test_ev_car_falls_back_to_standard_when_no_ev_spots():
 
 
 def test_equal_distance_assigns_spot_with_lower_number():
-    """Tiebreak – A-02 and A-07 both at 15 m; A-02 is picked (lexicographic order)."""
+    """Tiebreak – A-02 and A-07 both at 15 m; A-02 is picked (numeric: 2 < 7)."""
     zones = [Zone(zone_id="A", priority=1)]
     spots = [
         Spot(spot_id="A-07", zone_id="A", spot_type=SpotType.STANDARD, distance_to_entrance=15),
@@ -209,3 +209,40 @@ def test_equal_distance_assigns_spot_with_lower_number():
 
     assert result.status == AllocationStatus.ASSIGNED
     assert result.spot == "A-02"
+
+
+def test_equal_distance_numeric_order_not_lexicographic():
+    """Tiebreak numeric – A-9 and A-10 both at 15 m; A-9 wins (9 < 10, not '9' > '1')."""
+    zones = [Zone(zone_id="A", priority=1)]
+    spots = [
+        Spot(spot_id="A-10", zone_id="A", spot_type=SpotType.STANDARD, distance_to_entrance=15),
+        Spot(spot_id="A-9", zone_id="A", spot_type=SpotType.STANDARD, distance_to_entrance=15),
+    ]
+    repo = InMemoryRepository(TENANT_A, zones, spots)
+    service = ParkingAllocationService(repo)
+
+    result = service.process_event(entry("LTA123"))
+
+    assert result.status == AllocationStatus.ASSIGNED
+    assert result.spot == "A-9"
+
+
+def test_successful_exit_releases_spot_and_increments_free_count():
+    """Successful exit – LTA123 leaves, spot freed, status RELEASED, free count +1."""
+    zones = [Zone(zone_id="A", priority=1)]
+    spots = [
+        Spot(spot_id="A-01", zone_id="A", spot_type=SpotType.STANDARD,
+             distance_to_entrance=10, is_occupied=True),
+    ]
+    active = [ActiveParking(plate="LTA123", spot_id="A-01", zone_id="A")]
+    repo = InMemoryRepository(TENANT_A, zones, spots, active_parkings=active)
+    service = ParkingAllocationService(repo)
+
+    result = service.process_event(exit_event("LTA123"))
+
+    assert result.status == AllocationStatus.RELEASED
+    assert result.spot == "A-01"
+    assert result.zone == "A"
+    assert result.free_in_zone == 1
+    assert repo.get_active_parking("LTA123") is None
+    assert repo.count_free_spots("A") == 1

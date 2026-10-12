@@ -35,8 +35,12 @@ class InMemoryRepository(ParkingRepository):
     def get_active_parking(self, plate: str) -> ActiveParking | None:
         return self._active_parkings.get(plate)
 
-    def mark_spot_occupied(self, spot_id: str) -> None:
-        self._spots[spot_id].is_occupied = True
+    def claim_spot(self, spot_id: str) -> bool:
+        spot = self._spots[spot_id]
+        if spot.is_occupied:
+            return False
+        spot.is_occupied = True
+        return True
 
     def mark_spot_free(self, spot_id: str) -> None:
         self._spots[spot_id].is_occupied = False
