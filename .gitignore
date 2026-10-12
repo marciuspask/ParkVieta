@@ -3,3 +3,4 @@ __pycache__/
 .pytest_cache/
 .env
 docs/ii-uzduotis.pdf
+.DS_Store
