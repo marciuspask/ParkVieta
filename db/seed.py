@@ -1,15 +1,24 @@
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from db.database import get_engine
-from db.orm_models import ActiveParkingORM, Base, SpotORM, ZoneORM
+from db.orm_models import ActiveParkingORM, Base, SpotORM, TenantORM, ZoneORM
 
 
 def seed(session: Session) -> None:
     session.query(ActiveParkingORM).delete()
     session.query(SpotORM).delete()
     session.query(ZoneORM).delete()
+    session.query(TenantORM).delete()
 
     session.add_all([
+        TenantORM(tenant_id="biuru-centras-a", name="Biurų centras A"),
+        TenantORM(tenant_id="prekybos-centras-b", name="Prekybos centras B"),
+
         # --- Biurų centras A: zonos A (6 vietų) ir B (4 vietos), iš viso 10 ---
         ZoneORM(tenant_id="biuru-centras-a", zone_id="A", priority=1),
         ZoneORM(tenant_id="biuru-centras-a", zone_id="B", priority=2),
@@ -53,9 +62,16 @@ def seed(session: Session) -> None:
     session.commit()
 
 
+def init_if_empty(session: Session) -> None:
+    if session.execute(select(TenantORM)).scalars().first() is not None:
+        print("Duomenys jau yra, praleista.")
+        return
+    seed(session)
+    print("Seed duomenys įkelti.")
+
+
 if __name__ == "__main__":
     engine = get_engine()
     Base.metadata.create_all(engine)
     with Session(engine) as s:
-        seed(s)
-    print("Seed duomenys įkelti.")
+        init_if_empty(s)

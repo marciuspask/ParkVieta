@@ -44,6 +44,7 @@ def _clean(session: Session) -> None:
     session.execute(text("DELETE FROM active_parkings"))
     session.execute(text("DELETE FROM spots"))
     session.execute(text("DELETE FROM zones"))
+    session.execute(text("DELETE FROM tenants"))
     session.commit()
 
 

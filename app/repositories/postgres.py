@@ -27,6 +27,14 @@ class PostgreSQLRepository(ParkingRepository):
 
     # --- spot queries ---
 
+    def get_all_spots(self, zone_id: str) -> list[Spot]:
+        rows = self._session.execute(
+            self._spot_q()
+            .where(SpotORM.zone_id == zone_id)
+            .order_by(SpotORM.distance_to_entrance, SpotORM.spot_id)
+        ).scalars().all()
+        return [self._to_spot(r) for r in rows]
+
     def get_free_spots(self, zone_id: str) -> list[Spot]:
         rows = self._session.execute(
             self._spot_q()

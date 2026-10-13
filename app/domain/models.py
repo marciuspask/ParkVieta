@@ -69,7 +69,7 @@ class ParkingEvent:
     plate: str
     vehicle_type: VehicleType
     has_disability_permit: bool
-    preferred_zone: str
+    preferred_zone: Optional[str]
     timestamp: datetime
 
 

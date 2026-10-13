@@ -227,6 +227,42 @@ def test_equal_distance_numeric_order_not_lexicographic():
     assert result.spot == "A-9"
 
 
+def test_no_zone_picks_globally_nearest_across_all_zones():
+    """No preferred zone: B-01 (5 m) is picked over A-01 (10 m); alternative_zone is False."""
+    zones = [Zone(zone_id="A", priority=1), Zone(zone_id="B", priority=2)]
+    spots = [
+        Spot(spot_id="A-01", zone_id="A", spot_type=SpotType.STANDARD, distance_to_entrance=10),
+        Spot(spot_id="A-02", zone_id="A", spot_type=SpotType.STANDARD, distance_to_entrance=20),
+        Spot(spot_id="B-01", zone_id="B", spot_type=SpotType.STANDARD, distance_to_entrance=5),
+    ]
+    repo = InMemoryRepository(TENANT_A, zones, spots)
+    service = ParkingAllocationService(repo)
+
+    result = service.process_event(entry("LTA123", preferred_zone=None))
+
+    assert result.status == AllocationStatus.ASSIGNED
+    assert result.spot == "B-01"
+    assert result.alternative_zone is False
+
+
+def test_with_preferred_zone_existing_behavior_unchanged():
+    """With preferred_zone='A': A-01 (10 m) is assigned; B-01 (5 m) is ignored."""
+    zones = [Zone(zone_id="A", priority=1), Zone(zone_id="B", priority=2)]
+    spots = [
+        Spot(spot_id="A-01", zone_id="A", spot_type=SpotType.STANDARD, distance_to_entrance=10),
+        Spot(spot_id="A-02", zone_id="A", spot_type=SpotType.STANDARD, distance_to_entrance=20),
+        Spot(spot_id="B-01", zone_id="B", spot_type=SpotType.STANDARD, distance_to_entrance=5),
+    ]
+    repo = InMemoryRepository(TENANT_A, zones, spots)
+    service = ParkingAllocationService(repo)
+
+    result = service.process_event(entry("LTA123", preferred_zone="A"))
+
+    assert result.status == AllocationStatus.ASSIGNED
+    assert result.spot == "A-01"
+    assert result.alternative_zone is False
+
+
 def test_successful_exit_releases_spot_and_increments_free_count():
     """Successful exit – LTA123 leaves, spot freed, status RELEASED, free count +1."""
     zones = [Zone(zone_id="A", priority=1)]

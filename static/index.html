@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ParkVieta – vartų imitacija</title>
+  <style>
+    body { font-family: sans-serif; max-width: 640px; margin: 36px auto; padding: 0 16px; color: #222; }
+    h1   { font-size: 1.4rem; margin-bottom: 4px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 12px 0; }
+    h2   { font-size: 1rem; margin: 0 0 12px; }
+    label { display: block; margin: 8px 0 2px; font-size: 0.88rem; color: #555; }
+    input[type="text"], select {
+      width: 100%; box-sizing: border-box; padding: 7px 9px;
+      border: 1px solid #ccc; border-radius: 5px; font-size: 0.95rem;
+    }
+    .row { display: flex; gap: 8px; }
+    .row > div { flex: 1; }
+    .check-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: 0.95rem; }
+    .btns { display: flex; gap: 8px; margin-top: 12px; }
+    button { flex: 1; padding: 9px; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer; font-weight: 600; }
+    .btn-entry { background: #1a7f4b; color: #fff; }
+    .btn-entry:hover { background: #155f39; }
+    .btn-exit  { background: #2563eb; color: #fff; }
+    .btn-exit:hover  { background: #1d4ed8; }
+    .result { padding: 10px 14px; border-radius: 6px; font-size: 0.93rem; }
+    .assigned { background: #d1fae5; color: #065f46; }
+    .released { background: #dbeafe; color: #1e3a8a; }
+    .rejected { background: #fee2e2; color: #991b1b; }
+    .refresh-btn {
+      float: right; padding: 2px 8px; font-size: 0.8rem; cursor: pointer;
+      background: none; border: 1px solid #ccc; border-radius: 4px; font-weight: normal;
+    }
+
+    /* ── Aikštelės planas ── */
+    .zone-block { margin-bottom: 20px; }
+    .zone-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 8px;
+    }
+    .zone-title { font-weight: 700; font-size: 0.95rem; }
+    .zone-free  { font-size: 0.85rem; color: #555; }
+
+    .spots { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    .spot {
+      width: 78px; padding: 7px 4px 5px; border-radius: 7px;
+      text-align: center; border: 2px solid transparent;
+    }
+    .spot-id   { font-size: 0.82rem; font-weight: 700; line-height: 1.2; }
+    .spot-dist { font-size: 0.72rem; margin-top: 2px; }
+    .spot-badge {
+      display: inline-block; margin-top: 3px;
+      font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .03em; padding: 1px 4px; border-radius: 3px;
+    }
+
+    /* Laisvų vietų spalvos pagal tipą */
+    .type-STANDARD { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+    .type-STANDARD .spot-badge { background: #a7f3d0; }
+
+    .type-EV       { background: #dbeafe; color: #1e3a8a; border-color: #93c5fd; }
+    .type-EV       .spot-badge { background: #bfdbfe; }
+
+    .type-DISABLED { background: #ede9fe; color: #4c1d95; border-color: #c4b5fd; }
+    .type-DISABLED .spot-badge { background: #ddd6fe; }
+
+    /* Užimta – dengianc tipą */
+    .occupied { background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; }
+    .occupied .spot-badge { background: #e5e7eb; color: #9ca3af; }
+
+    /* Paryškinimas po paskyrimo */
+    @keyframes flash {
+      0%   { box-shadow: 0 0 0 3px #fbbf24; }
+      50%  { box-shadow: 0 0 0 7px #fde68a; }
+      100% { box-shadow: none; }
+    }
+    .spot-flash { animation: flash 1.8s ease-out forwards; }
+
+    /* Legenda */
+    .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.78rem; color: #444; }
+    .legend-swatch { width: 13px; height: 13px; border-radius: 3px; border: 1px solid #ccc; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+<h1>ParkVieta</h1>
+<p style="color:#666;font-size:0.88rem;margin:0 0 8px">Vartų imitacija · <a href="/docs">API dokumentacija</a></p>
+
+<div class="card">
+  <h2>Klientas</h2>
+  <select id="tenant" onchange="refreshOccupancy()">
+    <option value="biuru-centras-a">Biurų centras A</option>
+    <option value="prekybos-centras-b">Prekybos centras B</option>
+  </select>
+</div>
+
+<div class="card">
+  <h2>Automobilis</h2>
+  <div class="row">
+    <div>
+      <label>Valstybinis numeris</label>
+      <input id="plate" type="text" placeholder="LTA123">
+    </div>
+    <div>
+      <label>Pageidaujama zona</label>
+      <select id="zone">
+        <option value="">Bet kuri</option>
+      </select>
+    </div>
+  </div>
+  <label>Automobilio tipas</label>
+  <select id="vehicleType">
+    <option value="STANDARD">Benzininis / dyzelinis</option>
+    <option value="EV">Elektromobilis (EV)</option>
+  </select>
+  <div class="check-row">
+    <input id="disability" type="checkbox">
+    <span>Neįgaliojo leidimas</span>
+  </div>
+  <div class="btns">
+    <button class="btn-entry" onclick="sendEvent('ENTRY')">⬇ Įvažiavimas</button>
+    <button class="btn-exit"  onclick="sendEvent('EXIT')">⬆ Išvažiavimas</button>
+  </div>
+</div>
+
+<div id="result"></div>
+
+<div class="card">
+  <h2>Aikštelės planas <button class="refresh-btn" onclick="refreshOccupancy()">↻</button></h2>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-swatch type-STANDARD"></div>Paprasta</div>
+    <div class="legend-item"><div class="legend-swatch type-EV"></div>EV</div>
+    <div class="legend-item"><div class="legend-swatch type-DISABLED"></div>Neįgaliųjų</div>
+    <div class="legend-item"><div class="legend-swatch occupied"></div>Užimta</div>
+  </div>
+  <div id="plan"><em style="color:#999">Kraunama...</em></div>
+</div>
+
+<script>
+async function sendEvent(eventType) {
+  const plate = document.getElementById('plate').value.trim();
+  if (!plate) { alert('Įveskite valstybinį numerį'); return; }
+
+  const payload = {
+    event_type: eventType,
+    plate,
+    vehicle_type: document.getElementById('vehicleType').value,
+    has_disability_permit: document.getElementById('disability').checked,
+    preferred_zone: document.getElementById('zone').value || null,
+  };
+
+  try {
+    const resp = await fetch('/events', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': document.getElementById('tenant').value,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    showResult(data);
+    const flashSpot = data.status === 'ASSIGNED' ? data.spot : null;
+    await refreshOccupancy(flashSpot);
+  } catch (err) {
+    showRaw('rejected', 'Tinklo klaida: ' + err.message);
+  }
+}
+
+function showResult(data) {
+  if (data.status === 'ASSIGNED') {
+    const alt = data.alternative_zone ? ' (kita zona)' : '';
+    showRaw('assigned',
+      `✅ Paskirta: <b>${data.spot}</b> (${data.spot_type})${alt} · laisvų zonoje: ${data.free_in_zone}`);
+  } else if (data.status === 'RELEASED') {
+    showRaw('released',
+      `↑ Atlaisvinta: <b>${data.spot}</b> · laisvų zonoje: ${data.free_in_zone}`);
+  } else {
+    showRaw('rejected', `❌ ${data.error_code}: ${data.message}`);
+  }
+}
+
+function showRaw(cls, html) {
+  document.getElementById('result').innerHTML =
+    `<div class="card result ${cls}">${html}</div>`;
+}
+
+async function refreshOccupancy(flashSpot = null) {
+  try {
+    const resp = await fetch('/occupancy', {
+      headers: { 'X-Tenant-ID': document.getElementById('tenant').value },
+    });
+    const data = await resp.json();
+    updateZoneSelector(data.zones);
+    renderPlan(data.zones);
+    if (flashSpot) {
+      const el = document.getElementById('spot-' + flashSpot);
+      if (el) {
+        el.classList.remove('spot-flash');
+        void el.offsetWidth;          // reflow – perkraunama animacija
+        el.classList.add('spot-flash');
+        setTimeout(() => el.classList.remove('spot-flash'), 1900);
+      }
+    }
+  } catch (err) {
+    document.getElementById('plan').innerHTML =
+      `<em style="color:#999">Klaida: ${err.message}</em>`;
+  }
+}
+
+function updateZoneSelector(zones) {
+  const sel = document.getElementById('zone');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Bet kuri</option>' +
+    (zones || []).map(z => `<option value="${z.zone_id}">Zona ${z.zone_id}</option>`).join('');
+  if ([...sel.options].some(o => o.value === current)) sel.value = current;
+}
+
+const TYPE_LABEL = { STANDARD: 'Paprasta', EV: 'EV', DISABLED: 'Neįg.' };
+
+function renderPlan(zones) {
+  if (!zones || !zones.length) {
+    document.getElementById('plan').innerHTML = '<em>Nėra zonų.</em>';
+    return;
+  }
+
+  const html = zones.map(zone => {
+    const free = zone.free_spots;
+    const freeLabel = `${free} laisv${free === 1 ? 'a' : 'os'}`;
+
+    const spotsHtml = (zone.spots || []).map(spot => {
+      const cls = spot.is_occupied ? 'occupied' : `type-${spot.spot_type}`;
+      const badge = TYPE_LABEL[spot.spot_type] || spot.spot_type;
+      return `<div class="spot ${cls}" id="spot-${spot.spot_id}">
+        <div class="spot-id">${spot.spot_id}</div>
+        <div class="spot-dist">${spot.distance_to_entrance}&nbsp;m</div>
+        <div><span class="spot-badge">${badge}</span></div>
+      </div>`;
+    }).join('');
+
+    return `<div class="zone-block">
+      <div class="zone-header">
+        <span class="zone-title">Zona&nbsp;${zone.zone_id}</span>
+        <span class="zone-free">${freeLabel}</span>
+      </div>
+      <div class="spots">${spotsHtml}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('plan').innerHTML = html;
+}
+
+window.addEventListener('load', () => refreshOccupancy());
+</script>
+</body>
+</html>

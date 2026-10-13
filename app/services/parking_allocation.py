@@ -51,7 +51,7 @@ class ParkingAllocationService:
     # --- entry ---
 
     def _process_entry(self, event: ParkingEvent) -> AllocationResult:
-        if self._repository.get_zone(event.preferred_zone) is None:
+        if event.preferred_zone is not None and self._repository.get_zone(event.preferred_zone) is None:
             raise ParkingError(
                 ErrorCode.UNKNOWN_ZONE,
                 f"Zona {event.preferred_zone} nerasta",
@@ -85,7 +85,13 @@ class ParkingAllocationService:
 
     # --- spot selection (rules 3 and 4) ---
 
-    def _assign_spot(self, vehicle: Vehicle, preferred_zone: str) -> tuple[Spot, bool]:
+    def _assign_spot(self, vehicle: Vehicle, preferred_zone: str | None) -> tuple[Spot, bool]:
+        if preferred_zone is None:
+            spot = self._find_best_spot_globally(vehicle)
+            if spot is not None:
+                return spot, False
+            raise ParkingError(ErrorCode.LOT_FULL, "Aikštelė pilna, nėra tinkamų laisvų vietų")
+
         spot = self._find_best_spot(vehicle, preferred_zone)
         if spot is not None:
             return spot, False
@@ -99,22 +105,25 @@ class ParkingAllocationService:
 
         raise ParkingError(ErrorCode.LOT_FULL, "Aikštelė pilna, nėra tinkamų laisvų vietų")
 
-    def _find_best_spot(self, vehicle: Vehicle, zone_id: str) -> Spot | None:
-        free_spots = self._repository.get_free_spots(zone_id)
+    def _find_best_spot_globally(self, vehicle: Vehicle) -> Spot | None:
+        all_free: list[Spot] = []
+        for zone in self._repository.get_zones_by_priority():
+            all_free.extend(self._repository.get_free_spots(zone.zone_id))
+        return self._select_best(vehicle, all_free)
 
+    def _find_best_spot(self, vehicle: Vehicle, zone_id: str) -> Spot | None:
+        return self._select_best(vehicle, self._repository.get_free_spots(zone_id))
+
+    def _select_best(self, vehicle: Vehicle, spots: list[Spot]) -> Spot | None:
         preferred = [
-            s for s in free_spots
+            s for s in spots
             if s.spot_type != SpotType.STANDARD
             and ELIGIBILITY_RULES[s.spot_type].is_eligible(vehicle, s)
         ]
         if preferred:
             return self._nearest(preferred)
-
-        standard = [s for s in free_spots if s.spot_type == SpotType.STANDARD]
-        if standard:
-            return self._nearest(standard)
-
-        return None
+        standard = [s for s in spots if s.spot_type == SpotType.STANDARD]
+        return self._nearest(standard) if standard else None
 
     @staticmethod
     def _nearest(spots: list[Spot]) -> Spot:

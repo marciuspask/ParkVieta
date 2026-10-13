@@ -6,6 +6,14 @@ class Base(DeclarativeBase):
     pass
 
 
+class TenantORM(Base):
+    __tablename__ = "tenants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+
+
 class ZoneORM(Base):
     __tablename__ = "zones"
     __table_args__ = (
