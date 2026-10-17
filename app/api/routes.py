@@ -3,19 +3,14 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
-from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, get_tenant_id
+from app.api.dependencies import get_repository, get_tenant_id
 from app.api.schemas import OccupancyResponse, ParkingEventIn, SpotInfo, ZoneOccupancy
 from app.domain.models import ParkingEvent
-from app.repositories.postgres import PostgreSQLRepository
+from app.repositories.base import ParkingRepository
 from app.services.parking_allocation import ParkingAllocationService
 
 router = APIRouter()
-
-
-def _make_service(tenant_id: str, session: Session) -> ParkingAllocationService:
-    return ParkingAllocationService(PostgreSQLRepository(tenant_id, session))
 
 
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
@@ -28,9 +23,9 @@ def serve_ui():
 def handle_event(
     payload: ParkingEventIn,
     tenant_id: str = Depends(get_tenant_id),
-    session: Session = Depends(get_db),
+    repo: ParkingRepository = Depends(get_repository),
 ):
-    service = _make_service(tenant_id, session)
+    service = ParkingAllocationService(repo)
     domain_event = ParkingEvent(
         tenant_id=tenant_id,
         event_type=payload.event_type,
@@ -47,9 +42,8 @@ def handle_event(
 @router.get("/occupancy", response_model=OccupancyResponse)
 def get_occupancy(
     tenant_id: str = Depends(get_tenant_id),
-    session: Session = Depends(get_db),
+    repo: ParkingRepository = Depends(get_repository),
 ):
-    repo = PostgreSQLRepository(tenant_id, session)
     zones = repo.get_zones_by_priority()
     return OccupancyResponse(
         tenant_id=tenant_id,

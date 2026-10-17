@@ -2,6 +2,8 @@ from fastapi import Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.repositories.base import ParkingRepository
+from app.repositories.postgres import PostgreSQLRepository
 from db.database import get_engine
 from db.orm_models import TenantORM
 
@@ -26,3 +28,10 @@ def get_tenant_id(
     if exists is None:
         raise HTTPException(status_code=404, detail=f"Tenant '{x_tenant_id}' not found")
     return x_tenant_id
+
+
+def get_repository(
+    tenant_id: str = Depends(get_tenant_id),
+    session: Session = Depends(get_db),
+) -> ParkingRepository:
+    return PostgreSQLRepository(tenant_id, session)

@@ -522,7 +522,7 @@ domain → (nieko iš infrastruktūros) ✅
 
 13. **`while not self._repository.claim_spot(spot.spot_id):`** – pesimistinė blokavimo strategija (`SELECT ... FOR UPDATE`) yra teisinga konkurencijos valdymui. Ciklas negali suktis be galo: kiekvienas apsisukimas arba sėkmingai užima vietą, arba `_assign_spot` meta `LOT_FULL` (nes laisvos vietos tik mažėja po kiekvieno kito commit). Nekeisti.
 
-14. **`ParkingError` išimčių mechanizmas** – servisas meta tipines išimtis, routes'ai jas fiksuoja – tai švarus ir lengvai testuojamas šablonas. Nekeisti.
+14. **`ParkingError` išimčių mechanizmas** – servisas meta `ParkingError`, o `process_event` pats ją sugauna ir paverčia `AllocationResult(REJECTED, ...)`. Routes niekada nemato išimties – gauna tik rezultato objektą. Tai švarus ir lengvai testuojamas šablonas. Nekeisti.
 
 15. **`_zone_q()`, `_spot_q()`, `_parking_q()` query builder metodai** (`postgres.py`) – puikus tenant izoliacijos mechanizmas, neleidžiantis „pamiršti" tenant filtro. Nekeisti.
 
