@@ -7,8 +7,8 @@ def spot_number(spot_id: str) -> int:
     """Grąžina numerinę vietos ID dalį (pvz. 'A-01' → 1, 'B-12' → 12)."""
     try:
         return int(spot_id.split("-")[-1])
-    except (ValueError, IndexError):
-        raise ValueError(f"Nepavyksta išgauti numerio iš vietos ID: {spot_id!r}")
+    except (ValueError, IndexError) as err:
+        raise ValueError(f"Nepavyksta išgauti numerio iš vietos ID: {spot_id!r}") from err
 
 
 class VehicleType(str, Enum):

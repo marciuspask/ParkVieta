@@ -79,8 +79,7 @@ class PostgreSQLRepository(ParkingRepository):
     def _query_spots(self, zone_id: str, occupied: bool | None = None) -> list[Spot]:
         q = self._spot_q().where(SpotORM.zone_id == zone_id)
         if occupied is not None:
-            q = q.where(SpotORM.is_occupied == occupied)  # noqa: E712
-        q = q.order_by(SpotORM.distance_to_entrance)
+            q = q.where(SpotORM.is_occupied.is_(occupied))
         spots = [self._to_spot(r) for r in self._session.execute(q).scalars().all()]
         return sorted(spots, key=lambda s: (s.distance_to_entrance, spot_number(s.spot_id)))
 
