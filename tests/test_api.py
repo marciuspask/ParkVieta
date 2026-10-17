@@ -1,4 +1,5 @@
 """API lygio izoliacijos testai su FastAPI TestClient."""
+
 import os
 
 import pytest
@@ -10,6 +11,8 @@ from app.api.dependencies import get_db
 from app.api.main import app
 from db.orm_models import ActiveParkingORM, Base, SpotORM, TenantORM, ZoneORM
 
+pytestmark = pytest.mark.integration
+
 TENANT_A = "biuru-centras-a"
 TENANT_B = "prekybos-centras-b"
 
@@ -19,8 +22,7 @@ def api_engine():
     url = os.environ.get("TEST_DATABASE_URL")
     if not url:
         pytest.fail(
-            "TEST_DATABASE_URL is not set. "
-            "Copy .env.example to .env and run: docker compose up -d"
+            "TEST_DATABASE_URL is not set. Copy .env.example to .env and run: docker compose up -d"
         )
     engine = create_engine(url)
     Base.metadata.create_all(engine)
@@ -35,18 +37,31 @@ def client(api_engine):
         s.execute(text("DELETE FROM spots"))
         s.execute(text("DELETE FROM zones"))
         s.execute(text("DELETE FROM tenants"))
-        s.add_all([
-            TenantORM(tenant_id=TENANT_A, name="Biurų centras A"),
-            TenantORM(tenant_id=TENANT_B, name="Prekybos centras B"),
-            ZoneORM(tenant_id=TENANT_A, zone_id="A", priority=1),
-            SpotORM(tenant_id=TENANT_A, zone_id="A", spot_id="A-01",
-                    spot_type="STANDARD", distance_to_entrance=10, is_occupied=True),
-            ActiveParkingORM(tenant_id=TENANT_A, plate="LTA123",
-                             spot_id="A-01", zone_id="A"),
-            ZoneORM(tenant_id=TENANT_B, zone_id="A", priority=1),
-            SpotORM(tenant_id=TENANT_B, zone_id="A", spot_id="A-01",
-                    spot_type="STANDARD", distance_to_entrance=10, is_occupied=False),
-        ])
+        s.add_all(
+            [
+                TenantORM(tenant_id=TENANT_A, name="Biurų centras A"),
+                TenantORM(tenant_id=TENANT_B, name="Prekybos centras B"),
+                ZoneORM(tenant_id=TENANT_A, zone_id="A", priority=1),
+                SpotORM(
+                    tenant_id=TENANT_A,
+                    zone_id="A",
+                    spot_id="A-01",
+                    spot_type="STANDARD",
+                    distance_to_entrance=10,
+                    is_occupied=True,
+                ),
+                ActiveParkingORM(tenant_id=TENANT_A, plate="LTA123", spot_id="A-01", zone_id="A"),
+                ZoneORM(tenant_id=TENANT_B, zone_id="A", priority=1),
+                SpotORM(
+                    tenant_id=TENANT_B,
+                    zone_id="A",
+                    spot_id="A-01",
+                    spot_type="STANDARD",
+                    distance_to_entrance=10,
+                    is_occupied=False,
+                ),
+            ]
+        )
         s.commit()
 
     def override_get_db():

@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 100
+exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E712"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/api/main.py" = ["E402"]
+"db/seed.py" = ["E402"]
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: greiti testai, veikia atmintyje, nereikia DB",
+    "integration: reikia veikiančios PostgreSQL DB (TEST_DATABASE_URL)",
+]

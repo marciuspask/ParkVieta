@@ -1,7 +1,14 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+
+
+def spot_number(spot_id: str) -> int:
+    """Grąžina numerinę vietos ID dalį (pvz. 'A-01' → 1, 'B-12' → 12)."""
+    try:
+        return int(spot_id.split("-")[-1])
+    except (ValueError, IndexError):
+        raise ValueError(f"Nepavyksta išgauti numerio iš vietos ID: {spot_id!r}")
 
 
 class VehicleType(str, Enum):
@@ -69,17 +76,17 @@ class ParkingEvent:
     plate: str
     vehicle_type: VehicleType
     has_disability_permit: bool
-    preferred_zone: Optional[str]
+    preferred_zone: str | None
     timestamp: datetime
 
 
 @dataclass
 class AllocationResult:
     status: AllocationStatus
-    zone: Optional[str] = None
-    spot: Optional[str] = None
-    spot_type: Optional[SpotType] = None
-    free_in_zone: Optional[int] = None
+    zone: str | None = None
+    spot: str | None = None
+    spot_type: SpotType | None = None
+    free_in_zone: int | None = None
     alternative_zone: bool = False
-    error_code: Optional[ErrorCode] = None
-    message: Optional[str] = None
+    error_code: ErrorCode | None = None
+    message: str | None = None

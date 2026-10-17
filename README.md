@@ -14,6 +14,7 @@ SaaS sistema parkavimo aikštelių valdytojams. Pagal įvažiavimo ir išvažiav
 | python-dotenv | 1.2.2 |
 | pytest | 9.1.1 |
 | httpx | 0.28.1 |
+| ruff | 0.11.13 |
 | PostgreSQL | 16 (Docker image) |
 | Docker Compose | 2.x |
 
@@ -53,16 +54,37 @@ Pradėti iš naujo nuo tuščios DB:
 docker compose down -v && docker compose up
 ```
 
-## Testai
-
-Prieš paleidžiant testus DB turi veikti:
+## Kodo kokybė
 
 ```sh
+ruff check .          # linteris: tikrina kodo kokybę
+ruff format --check . # tikrina formatavimą (be pakeitimų)
+ruff format .         # pritaiko formatavimą
+```
+
+## Testai
+
+Testai suskirstyti į du tipus su pytest markeriais:
+
+| Markeris | Failas | DB reikalinga? |
+|----------|--------|----------------|
+| `unit` | `tests/test_allocation.py` | Ne |
+| `integration` | `tests/test_api.py`, `tests/test_tenant_isolation.py` | Taip |
+
+```sh
+# Tik greiti vienetiniai testai (be DB):
+python -m pytest -m unit -v
+
+# Tik integraciniai testai (reikia veikiančios DB):
+docker compose up -d
+python -m pytest -m integration -v
+
+# Visi testai:
 docker compose up -d
 python -m pytest -v
 ```
 
-Tikėtinas rezultatas: **18 passed, 0 skipped** (15 vienetinių + 3 API testai).
+Tikėtinas rezultatas: **21 passed** (14 unit + 7 integration).
 
 ## Pavyzdiniai duomenys
 

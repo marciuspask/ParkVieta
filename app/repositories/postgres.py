@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.models import ActiveParking, Spot, SpotType, Zone
+from app.domain.models import ActiveParking, Spot, SpotType, Zone, spot_number
 from app.repositories.base import ParkingRepository
 from db.orm_models import ActiveParkingORM, SpotORM, ZoneORM
 
@@ -20,42 +20,23 @@ class PostgreSQLRepository(ParkingRepository):
         return Zone(zone_id=row.zone_id, priority=row.priority) if row else None
 
     def get_zones_by_priority(self) -> list[Zone]:
-        rows = self._session.execute(
-            self._zone_q().order_by(ZoneORM.priority)
-        ).scalars().all()
+        rows = self._session.execute(self._zone_q().order_by(ZoneORM.priority)).scalars().all()
         return [Zone(zone_id=r.zone_id, priority=r.priority) for r in rows]
 
     # --- spot queries ---
 
     def get_all_spots(self, zone_id: str) -> list[Spot]:
-        rows = self._session.execute(
-            self._spot_q()
-            .where(SpotORM.zone_id == zone_id)
-            .order_by(SpotORM.distance_to_entrance, SpotORM.spot_id)
-        ).scalars().all()
-        return [self._to_spot(r) for r in rows]
+        return self._query_spots(zone_id)
 
     def get_free_spots(self, zone_id: str) -> list[Spot]:
-        rows = self._session.execute(
-            self._spot_q()
-            .where(SpotORM.zone_id == zone_id)
-            .where(SpotORM.is_occupied == False)  # noqa: E712
-        ).scalars().all()
-        return [self._to_spot(r) for r in rows]
+        return self._query_spots(zone_id, occupied=False)
 
     def count_free_spots(self, zone_id: str) -> int:
-        rows = self._session.execute(
-            self._spot_q()
-            .where(SpotORM.zone_id == zone_id)
-            .where(SpotORM.is_occupied == False)  # noqa: E712
-        ).scalars().all()
-        return len(rows)
+        return len(self.get_free_spots(zone_id))
 
     def claim_spot(self, spot_id: str) -> bool:
         row = self._session.execute(
-            self._spot_q()
-            .where(SpotORM.spot_id == spot_id)
-            .with_for_update()
+            self._spot_q().where(SpotORM.spot_id == spot_id).with_for_update()
         ).scalar_one()
         if row.is_occupied:
             return False
@@ -63,9 +44,7 @@ class PostgreSQLRepository(ParkingRepository):
         return True
 
     def mark_spot_free(self, spot_id: str) -> None:
-        row = self._session.execute(
-            self._spot_q().where(SpotORM.spot_id == spot_id)
-        ).scalar_one()
+        row = self._session.execute(self._spot_q().where(SpotORM.spot_id == spot_id)).scalar_one()
         row.is_occupied = False
 
     # --- active parking queries ---
@@ -79,12 +58,14 @@ class PostgreSQLRepository(ParkingRepository):
         return ActiveParking(plate=row.plate, spot_id=row.spot_id, zone_id=row.zone_id)
 
     def save_active_parking(self, parking: ActiveParking) -> None:
-        self._session.add(ActiveParkingORM(
-            tenant_id=self._tenant_id,
-            plate=parking.plate,
-            spot_id=parking.spot_id,
-            zone_id=parking.zone_id,
-        ))
+        self._session.add(
+            ActiveParkingORM(
+                tenant_id=self._tenant_id,
+                plate=parking.plate,
+                spot_id=parking.spot_id,
+                zone_id=parking.zone_id,
+            )
+        )
 
     def remove_active_parking(self, plate: str) -> None:
         row = self._session.execute(
@@ -92,6 +73,16 @@ class PostgreSQLRepository(ParkingRepository):
         ).scalar_one_or_none()
         if row is not None:
             self._session.delete(row)
+
+    # --- shared spot filter (every spot query goes through this) ---
+
+    def _query_spots(self, zone_id: str, occupied: bool | None = None) -> list[Spot]:
+        q = self._spot_q().where(SpotORM.zone_id == zone_id)
+        if occupied is not None:
+            q = q.where(SpotORM.is_occupied == occupied)  # noqa: E712
+        q = q.order_by(SpotORM.distance_to_entrance)
+        spots = [self._to_spot(r) for r in self._session.execute(q).scalars().all()]
+        return sorted(spots, key=lambda s: (s.distance_to_entrance, spot_number(s.spot_id)))
 
     # --- tenant-scoped query builders (every query goes through these) ---
 
@@ -102,9 +93,7 @@ class PostgreSQLRepository(ParkingRepository):
         return select(SpotORM).where(SpotORM.tenant_id == self._tenant_id)
 
     def _parking_q(self):
-        return select(ActiveParkingORM).where(
-            ActiveParkingORM.tenant_id == self._tenant_id
-        )
+        return select(ActiveParkingORM).where(ActiveParkingORM.tenant_id == self._tenant_id)
 
     # --- conversion ---
 

@@ -1,8 +1,9 @@
-"""Integration tests: tenant isolation and concurrency via real PostgreSQL.
+"""Integraciniai testai: nuomininko izoliacija ir lygiagretumas su realia PostgreSQL DB.
 
-Requires TEST_DATABASE_URL environment variable.
-Example: TEST_DATABASE_URL=postgresql://postgres:password@localhost:5432/parkvieta_test
+Reikalingas TEST_DATABASE_URL aplinkos kintamasis.
+Pavyzdys: TEST_DATABASE_URL=postgresql://postgres:password@localhost:5432/parkvieta_test
 """
+
 import os
 import threading
 from datetime import datetime
@@ -22,17 +23,19 @@ from app.repositories.postgres import PostgreSQLRepository
 from app.services.parking_allocation import ParkingAllocationService
 from db.orm_models import ActiveParkingORM, Base, SpotORM, ZoneORM
 
+pytestmark = pytest.mark.integration
+
 TENANT_A = "biuru-centras-a"
 TENANT_B = "prekybos-centras-b"
 TS = datetime(2026, 11, 10, 8, 15)
+
 
 @pytest.fixture(scope="module")
 def db_engine():
     url = os.environ.get("TEST_DATABASE_URL")
     if not url:
         pytest.fail(
-            "TEST_DATABASE_URL is not set. "
-            "Copy .env.example to .env and run: docker compose up -d"
+            "TEST_DATABASE_URL is not set. Copy .env.example to .env and run: docker compose up -d"
         )
     engine = create_engine(url)
     Base.metadata.create_all(engine)
@@ -50,49 +53,72 @@ def _clean(session: Session) -> None:
 
 @pytest.fixture
 def db_session(db_engine):
-    """Two clients seeded: Tenant A has LTA123 parked at A-01; Tenant B has A-01 free."""
+    """Du klientai: kliento A LTA123 yra A-01; kliento B A-01 laisva."""
     with Session(db_engine) as session:
         _clean(session)
-        session.add_all([
-            ZoneORM(tenant_id=TENANT_A, zone_id="A", priority=1),
-            SpotORM(tenant_id=TENANT_A, zone_id="A", spot_id="A-01",
-                    spot_type="STANDARD", distance_to_entrance=10, is_occupied=True),
-            ActiveParkingORM(tenant_id=TENANT_A, plate="LTA123",
-                             spot_id="A-01", zone_id="A"),
-            ZoneORM(tenant_id=TENANT_B, zone_id="A", priority=1),
-            SpotORM(tenant_id=TENANT_B, zone_id="A", spot_id="A-01",
-                    spot_type="STANDARD", distance_to_entrance=10, is_occupied=False),
-        ])
+        session.add_all(
+            [
+                ZoneORM(tenant_id=TENANT_A, zone_id="A", priority=1),
+                SpotORM(
+                    tenant_id=TENANT_A,
+                    zone_id="A",
+                    spot_id="A-01",
+                    spot_type="STANDARD",
+                    distance_to_entrance=10,
+                    is_occupied=True,
+                ),
+                ActiveParkingORM(tenant_id=TENANT_A, plate="LTA123", spot_id="A-01", zone_id="A"),
+                ZoneORM(tenant_id=TENANT_B, zone_id="A", priority=1),
+                SpotORM(
+                    tenant_id=TENANT_B,
+                    zone_id="A",
+                    spot_id="A-01",
+                    spot_type="STANDARD",
+                    distance_to_entrance=10,
+                    is_occupied=False,
+                ),
+            ]
+        )
         session.commit()
         yield session
 
 
 @pytest.fixture
 def one_free_spot(db_engine):
-    """One free STANDARD spot for Tenant A. Yields the engine so threads create own sessions."""
+    """Viena laisva STANDARD vieta klientui A. Grąžina engine, kad gijos kurtų atskiras sesijas."""
     with Session(db_engine) as session:
         _clean(session)
-        session.add_all([
-            ZoneORM(tenant_id=TENANT_A, zone_id="A", priority=1),
-            SpotORM(tenant_id=TENANT_A, zone_id="A", spot_id="A-01",
-                    spot_type="STANDARD", distance_to_entrance=10, is_occupied=False),
-        ])
+        session.add_all(
+            [
+                ZoneORM(tenant_id=TENANT_A, zone_id="A", priority=1),
+                SpotORM(
+                    tenant_id=TENANT_A,
+                    zone_id="A",
+                    spot_id="A-01",
+                    spot_type="STANDARD",
+                    distance_to_entrance=10,
+                    is_occupied=False,
+                ),
+            ]
+        )
         session.commit()
     return db_engine
 
 
 # --- isolation: read ---
 
+
 def test_tenant_b_cannot_read_tenant_a_active_parking(db_session):
-    """Client B's repository returns None for a plate parked under Client A."""
+    """Kliento B repozitorija grąžina None valstybiniam numeriui, kuris priskirtas klientui A."""
     repo_b = PostgreSQLRepository(TENANT_B, db_session)
     assert repo_b.get_active_parking("LTA123") is None
 
 
 # --- isolation: exit ---
 
+
 def test_tenant_b_exit_rejected_and_tenant_a_data_unchanged(db_session):
-    """Client B EXIT for LTA123 → REJECTED; Client A spot stays occupied."""
+    """Kliento B EXIT LTA123 → REJECTED; kliento A vieta lieka užimta."""
     repo_b = PostgreSQLRepository(TENANT_B, db_session)
     repo_a = PostgreSQLRepository(TENANT_A, db_session)
 
@@ -106,26 +132,39 @@ def test_tenant_b_exit_rejected_and_tenant_a_data_unchanged(db_session):
 
 def repo_b_exit(repo_b, plate):
     service_b = ParkingAllocationService(repo_b)
-    return service_b.process_event(ParkingEvent(
-        tenant_id=TENANT_B, event_type=EventType.EXIT, plate=plate,
-        vehicle_type=VehicleType.STANDARD, has_disability_permit=False,
-        preferred_zone="A", timestamp=TS,
-    ))
+    return service_b.process_event(
+        ParkingEvent(
+            tenant_id=TENANT_B,
+            event_type=EventType.EXIT,
+            plate=plate,
+            vehicle_type=VehicleType.STANDARD,
+            has_disability_permit=False,
+            preferred_zone="A",
+            timestamp=TS,
+        )
+    )
 
 
 # --- isolation: entry ---
 
+
 def test_tenant_b_entry_uses_own_spot_and_tenant_a_spot_unchanged(db_session):
-    """Client B ENTRY claims B's A-01; Client A's A-01 (occupied) and free count unchanged."""
+    """Kliento B ENTRY užima B A-01; kliento A A-01 (užimta) ir laisvų skaičius nepakinta."""
     repo_b = PostgreSQLRepository(TENANT_B, db_session)
     repo_a = PostgreSQLRepository(TENANT_A, db_session)
     service_b = ParkingAllocationService(repo_b)
 
-    result = service_b.process_event(ParkingEvent(
-        tenant_id=TENANT_B, event_type=EventType.ENTRY, plate="NEW001",
-        vehicle_type=VehicleType.STANDARD, has_disability_permit=False,
-        preferred_zone="A", timestamp=TS,
-    ))
+    result = service_b.process_event(
+        ParkingEvent(
+            tenant_id=TENANT_B,
+            event_type=EventType.ENTRY,
+            plate="NEW001",
+            vehicle_type=VehicleType.STANDARD,
+            has_disability_permit=False,
+            preferred_zone="A",
+            timestamp=TS,
+        )
+    )
 
     assert result.status == AllocationStatus.ASSIGNED
     assert result.spot == "A-01"
@@ -137,8 +176,9 @@ def test_tenant_b_entry_uses_own_spot_and_tenant_a_spot_unchanged(db_session):
 
 # --- concurrency ---
 
+
 def test_concurrent_entries_one_spot_exactly_one_assigned(one_free_spot):
-    """Two concurrent entries to a 1-spot zone: exactly one ASSIGNED, one LOT_FULL."""
+    """Du lygiagretūs įvažiavimai į 1 vietos zoną: lygiai vienas ASSIGNED, vienas LOT_FULL."""
     engine = one_free_spot
     results: dict[str, object] = {}
     barrier = threading.Barrier(2)
@@ -148,9 +188,13 @@ def test_concurrent_entries_one_spot_exactly_one_assigned(one_free_spot):
             repo = PostgreSQLRepository(TENANT_A, session)
             service = ParkingAllocationService(repo)
             event = ParkingEvent(
-                tenant_id=TENANT_A, event_type=EventType.ENTRY, plate=plate,
-                vehicle_type=VehicleType.STANDARD, has_disability_permit=False,
-                preferred_zone="A", timestamp=TS,
+                tenant_id=TENANT_A,
+                event_type=EventType.ENTRY,
+                plate=plate,
+                vehicle_type=VehicleType.STANDARD,
+                has_disability_permit=False,
+                preferred_zone="A",
+                timestamp=TS,
             )
             barrier.wait()
             result = service.process_event(event)
@@ -165,7 +209,8 @@ def test_concurrent_entries_one_spot_exactly_one_assigned(one_free_spot):
 
     assigned = sum(1 for r in results.values() if r.status == AllocationStatus.ASSIGNED)
     lot_full = sum(
-        1 for r in results.values()
+        1
+        for r in results.values()
         if r.status == AllocationStatus.REJECTED and r.error_code == ErrorCode.LOT_FULL
     )
 

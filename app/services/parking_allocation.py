@@ -9,6 +9,7 @@ from app.domain.models import (
     Spot,
     SpotType,
     Vehicle,
+    spot_number,
 )
 from app.domain.rules import ELIGIBILITY_RULES
 from app.repositories.base import ParkingRepository
@@ -51,7 +52,10 @@ class ParkingAllocationService:
     # --- entry ---
 
     def _process_entry(self, event: ParkingEvent) -> AllocationResult:
-        if event.preferred_zone is not None and self._repository.get_zone(event.preferred_zone) is None:
+        if (
+            event.preferred_zone is not None
+            and self._repository.get_zone(event.preferred_zone) is None
+        ):
             raise ParkingError(
                 ErrorCode.UNKNOWN_ZONE,
                 f"Zona {event.preferred_zone} nerasta",
@@ -116,7 +120,8 @@ class ParkingAllocationService:
 
     def _select_best(self, vehicle: Vehicle, spots: list[Spot]) -> Spot | None:
         preferred = [
-            s for s in spots
+            s
+            for s in spots
             if s.spot_type != SpotType.STANDARD
             and ELIGIBILITY_RULES[s.spot_type].is_eligible(vehicle, s)
         ]
@@ -129,5 +134,5 @@ class ParkingAllocationService:
     def _nearest(spots: list[Spot]) -> Spot:
         return min(
             spots,
-            key=lambda s: (s.distance_to_entrance, int(s.spot_id.split("-")[-1])),
+            key=lambda s: (s.distance_to_entrance, spot_number(s.spot_id)),
         )

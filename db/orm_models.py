@@ -16,9 +16,7 @@ class TenantORM(Base):
 
 class ZoneORM(Base):
     __tablename__ = "zones"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "zone_id"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "zone_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[str] = mapped_column(String(100), nullable=False)
