@@ -23,6 +23,12 @@ class InMemoryRepository(ParkingRepository):
     def get_zones_by_priority(self) -> list[Zone]:
         return sorted(self._zones.values(), key=lambda z: z.priority)
 
+    def get_all_spots(self, zone_id: str) -> list[Spot]:
+        return sorted(
+            [s for s in self._spots.values() if s.zone_id == zone_id],
+            key=lambda s: (s.distance_to_entrance, s.spot_id),
+        )
+
     def get_free_spots(self, zone_id: str) -> list[Spot]:
         return [
             s for s in self._spots.values()

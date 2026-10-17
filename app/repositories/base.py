@@ -14,6 +14,9 @@ class ParkingRepository(ABC):
     def get_zones_by_priority(self) -> list[Zone]: ...
 
     @abstractmethod
+    def get_all_spots(self, zone_id: str) -> list[Spot]: ...
+
+    @abstractmethod
     def get_free_spots(self, zone_id: str) -> list[Spot]: ...
 
     @abstractmethod
