@@ -27,7 +27,7 @@ class ParkingRepository(ABC):
 
     @abstractmethod
     def claim_spot(self, spot_id: str) -> bool:
-        """Lock row, mark as occupied. Returns False if already occupied."""
+        """Užrakina eilutę ir žymi kaip užimtą. Grąžina False, jei jau užimta."""
         ...
 
     @abstractmethod

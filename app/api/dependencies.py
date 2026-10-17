@@ -26,7 +26,7 @@ def get_tenant_id(
         select(TenantORM).where(TenantORM.tenant_id == x_tenant_id)
     ).scalar_one_or_none()
     if exists is None:
-        raise HTTPException(status_code=404, detail=f"Tenant '{x_tenant_id}' not found")
+        raise HTTPException(status_code=404, detail=f"Klientas '{x_tenant_id}' nerastas")
     return x_tenant_id
 
 

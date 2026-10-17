@@ -31,8 +31,6 @@ class ParkingAllocationService:
                 message=exc.message,
             )
 
-    # --- exit ---
-
     def _process_exit(self, event: ParkingEvent) -> AllocationResult:
         parking = self._repository.get_active_parking(event.plate)
         if parking is None:
@@ -48,8 +46,6 @@ class ParkingAllocationService:
             spot=parking.spot_id,
             free_in_zone=self._repository.count_free_spots(parking.zone_id),
         )
-
-    # --- entry ---
 
     def _process_entry(self, event: ParkingEvent) -> AllocationResult:
         if (
@@ -90,8 +86,6 @@ class ParkingAllocationService:
             alternative_zone=is_alternative,
         )
 
-    # --- spot selection (rules 3 and 4) ---
-
     def _assign_spot(
         self, vehicle: Vehicle, preferred_zone: str | None, excluded_spot_ids: set[str]
     ) -> tuple[Spot, bool]:
@@ -120,29 +114,28 @@ class ParkingAllocationService:
         all_free: list[Spot] = []
         for zone in self._repository.get_zones_by_priority():
             all_free.extend(self._repository.get_free_spots(zone.zone_id))
-        available = [s for s in all_free if s.spot_id not in excluded_spot_ids]
-        return self._select_best(vehicle, available)
+        return self._select_best(vehicle, all_free, excluded_spot_ids)
 
     def _find_best_spot(
         self, vehicle: Vehicle, zone_id: str, excluded_spot_ids: set[str]
     ) -> Spot | None:
-        free = [
-            s
-            for s in self._repository.get_free_spots(zone_id)
-            if s.spot_id not in excluded_spot_ids
-        ]
-        return self._select_best(vehicle, free)
+        return self._select_best(
+            vehicle, self._repository.get_free_spots(zone_id), excluded_spot_ids
+        )
 
-    def _select_best(self, vehicle: Vehicle, spots: list[Spot]) -> Spot | None:
+    def _select_best(
+        self, vehicle: Vehicle, spots: list[Spot], excluded_spot_ids: set[str]
+    ) -> Spot | None:
+        candidates = [s for s in spots if s.spot_id not in excluded_spot_ids]
         preferred = [
             s
-            for s in spots
+            for s in candidates
             if s.spot_type != SpotType.STANDARD
             and ELIGIBILITY_RULES[s.spot_type].is_eligible(vehicle, s)
         ]
         if preferred:
             return self._nearest(preferred)
-        standard = [s for s in spots if s.spot_type == SpotType.STANDARD]
+        standard = [s for s in candidates if s.spot_type == SpotType.STANDARD]
         return self._nearest(standard) if standard else None
 
     @staticmethod

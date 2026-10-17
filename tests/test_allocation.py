@@ -21,7 +21,7 @@ pytestmark = pytest.mark.unit
 
 TENANT_A = "biuru-centras-a"
 TENANT_B = "prekybos-centras-b"
-TS = datetime(2026, 11, 10, 8, 15)
+SAMPLE_TIMESTAMP = datetime(2026, 11, 10, 8, 15)
 
 
 def entry(
@@ -38,7 +38,7 @@ def entry(
         vehicle_type=vehicle_type,
         has_disability_permit=has_disability_permit,
         preferred_zone=preferred_zone,
-        timestamp=TS,
+        timestamp=SAMPLE_TIMESTAMP,
     )
 
 
@@ -50,7 +50,7 @@ def exit_event(plate, tenant_id=TENANT_A, preferred_zone="A"):
         vehicle_type=VehicleType.STANDARD,
         has_disability_permit=False,
         preferred_zone=preferred_zone,
-        timestamp=TS,
+        timestamp=SAMPLE_TIMESTAMP,
     )
 
 
@@ -348,9 +348,11 @@ def test_spot_number_raises_on_invalid_id():
 class _NeverClaimsRepository(InMemoryRepository):
     """Stub: claim_spot visada grąžina False – imituoja nuolatinę blokavimo nesėkmę.
 
-    Skaičiuoja iškvietimų kiekį ir kelia AssertionError viršijus 10 – tai aptinka
-    begalinį ciklą be priklausomybės nuo signal.alarm (veikia ir Windows).
+    Skaičiuoja iškvietimų kiekį ir kelia AssertionError viršijus _MAX_CLAIM_ATTEMPTS –
+    tai aptinka begalinį ciklą be priklausomybės nuo signal.alarm (veikia ir Windows).
     """
+
+    _MAX_CLAIM_ATTEMPTS = 10
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -358,7 +360,7 @@ class _NeverClaimsRepository(InMemoryRepository):
 
     def claim_spot(self, spot_id: str) -> bool:
         self.claim_spot_call_count += 1
-        if self.claim_spot_call_count > 10:
+        if self.claim_spot_call_count > self._MAX_CLAIM_ATTEMPTS:
             raise AssertionError(
                 f"claim_spot iškviestas {self.claim_spot_call_count} kartų – ciklas nesibaigia"
             )

@@ -11,8 +11,6 @@ class PostgreSQLRepository(ParkingRepository):
         super().__init__(tenant_id)
         self._session = session
 
-    # --- zone queries ---
-
     def get_zone(self, zone_id: str) -> Zone | None:
         row = self._session.execute(
             self._zone_q().where(ZoneORM.zone_id == zone_id)
@@ -22,8 +20,6 @@ class PostgreSQLRepository(ParkingRepository):
     def get_zones_by_priority(self) -> list[Zone]:
         rows = self._session.execute(self._zone_q().order_by(ZoneORM.priority)).scalars().all()
         return [Zone(zone_id=r.zone_id, priority=r.priority) for r in rows]
-
-    # --- spot queries ---
 
     def get_all_spots(self, zone_id: str) -> list[Spot]:
         return self._query_spots(zone_id)
@@ -46,8 +42,6 @@ class PostgreSQLRepository(ParkingRepository):
     def mark_spot_free(self, spot_id: str) -> None:
         row = self._session.execute(self._spot_q().where(SpotORM.spot_id == spot_id)).scalar_one()
         row.is_occupied = False
-
-    # --- active parking queries ---
 
     def get_active_parking(self, plate: str) -> ActiveParking | None:
         row = self._session.execute(
@@ -93,8 +87,6 @@ class PostgreSQLRepository(ParkingRepository):
 
     def _parking_q(self):
         return select(ActiveParkingORM).where(ActiveParkingORM.tenant_id == self._tenant_id)
-
-    # --- conversion ---
 
     @staticmethod
     def _to_spot(row: SpotORM) -> Spot:

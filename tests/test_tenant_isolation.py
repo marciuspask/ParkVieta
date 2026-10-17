@@ -27,7 +27,7 @@ pytestmark = pytest.mark.integration
 
 TENANT_A = "biuru-centras-a"
 TENANT_B = "prekybos-centras-b"
-TS = datetime(2026, 11, 10, 8, 15)
+SAMPLE_TIMESTAMP = datetime(2026, 11, 10, 8, 15)
 
 
 @pytest.fixture(scope="module")
@@ -122,7 +122,7 @@ def test_tenant_b_exit_rejected_and_tenant_a_data_unchanged(db_session):
     repo_b = PostgreSQLRepository(TENANT_B, db_session)
     repo_a = PostgreSQLRepository(TENANT_A, db_session)
 
-    result = repo_b_exit(repo_b, "LTA123")
+    result = exit_vehicle(repo_b, TENANT_B, "LTA123")
 
     assert result.status == AllocationStatus.REJECTED
     assert result.error_code == ErrorCode.NO_ACTIVE_ENTRY
@@ -130,17 +130,17 @@ def test_tenant_b_exit_rejected_and_tenant_a_data_unchanged(db_session):
     assert repo_a.count_free_spots("A") == 0
 
 
-def repo_b_exit(repo_b, plate):
-    service_b = ParkingAllocationService(repo_b)
-    return service_b.process_event(
+def exit_vehicle(repo, tenant_id, plate):
+    service = ParkingAllocationService(repo)
+    return service.process_event(
         ParkingEvent(
-            tenant_id=TENANT_B,
+            tenant_id=tenant_id,
             event_type=EventType.EXIT,
             plate=plate,
             vehicle_type=VehicleType.STANDARD,
             has_disability_permit=False,
             preferred_zone="A",
-            timestamp=TS,
+            timestamp=SAMPLE_TIMESTAMP,
         )
     )
 
@@ -162,7 +162,7 @@ def test_tenant_b_entry_uses_own_spot_and_tenant_a_spot_unchanged(db_session):
             vehicle_type=VehicleType.STANDARD,
             has_disability_permit=False,
             preferred_zone="A",
-            timestamp=TS,
+            timestamp=SAMPLE_TIMESTAMP,
         )
     )
 
@@ -194,7 +194,7 @@ def test_concurrent_entries_one_spot_exactly_one_assigned(one_free_spot):
                 vehicle_type=VehicleType.STANDARD,
                 has_disability_permit=False,
                 preferred_zone="A",
-                timestamp=TS,
+                timestamp=SAMPLE_TIMESTAMP,
             )
             barrier.wait()
             result = service.process_event(event)
