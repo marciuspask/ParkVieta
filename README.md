@@ -84,7 +84,7 @@ docker compose up -d
 python -m pytest -v
 ```
 
-Tikėtinas rezultatas: **21 passed** (14 unit + 7 integration).
+Tikėtinas rezultatas: **23 passed** (16 unit + 7 integration).
 
 ## Pavyzdiniai duomenys
 
@@ -133,7 +133,16 @@ curl -s -X POST http://localhost:8000/events \
 
 Tikėtinas atsakymas:
 ```json
-{"status":"ASSIGNED","zone":"A","spot":"A-01","spot_type":"STANDARD","free_in_zone":2,"alternative_zone":false}
+{
+    "status": "ASSIGNED",
+    "zone": "A",
+    "spot": "A-01",
+    "spot_type": "STANDARD",
+    "free_in_zone": 5,
+    "alternative_zone": false,
+    "error_code": null,
+    "message": null
+}
 ```
 
 ### 2. Pilna zona A → paprastas automobilis gauna vietą zonoje B
@@ -162,7 +171,19 @@ curl -s -X POST http://localhost:8000/events \
   | python3 -m json.tool
 ```
 
-Tikėtinas atsakymas: `ASSIGNED`, vieta **B-01**, `"alternative_zone": true`. EV vietos (A-04, A-05) lieka laisvos.
+Tikėtinas atsakymas (`alternative_zone: true`, EV vietos A-04 ir A-05 lieka laisvos):
+```json
+{
+    "status": "ASSIGNED",
+    "zone": "B",
+    "spot": "B-01",
+    "spot_type": "STANDARD",
+    "free_in_zone": 3,
+    "alternative_zone": true,
+    "error_code": null,
+    "message": null
+}
+```
 
 ### 3. Išvažiavimas be įvažiavimo → REJECTED
 
@@ -174,7 +195,19 @@ curl -s -X POST http://localhost:8000/events \
   | python3 -m json.tool
 ```
 
-Tikėtinas atsakymas: `REJECTED`, `"error_code": "NO_ACTIVE_ENTRY"`. Užimtumas nepakinta.
+Tikėtinas atsakymas (užimtumas nepakinta):
+```json
+{
+    "status": "REJECTED",
+    "zone": null,
+    "spot": null,
+    "spot_type": null,
+    "free_in_zone": null,
+    "alternative_zone": false,
+    "error_code": "NO_ACTIVE_ENTRY",
+    "message": "Automobilis ZZZ999 neturi aktyvaus įvažiavimo"
+}
+```
 
 ### 4. Kliento B kontekste bandoma atlaisvinti kliento A automobilį → REJECTED
 
@@ -186,7 +219,19 @@ curl -s -X POST http://localhost:8000/events \
   | python3 -m json.tool
 ```
 
-Tikėtinas atsakymas: `REJECTED`, `"error_code": "NO_ACTIVE_ENTRY"`. Kliento A duomenys nepakinta ir nematomi kliento B kontekste.
+Tikėtinas atsakymas (kliento A duomenys nepakinta ir nematomi kliento B kontekste):
+```json
+{
+    "status": "REJECTED",
+    "zone": null,
+    "spot": null,
+    "spot_type": null,
+    "free_in_zone": null,
+    "alternative_zone": false,
+    "error_code": "NO_ACTIVE_ENTRY",
+    "message": "Automobilis LTA123 neturi aktyvaus įvažiavimo"
+}
+```
 
 ### 5. Nežinomas klientas → 404
 
