@@ -1,3 +1,4 @@
+import signal
 from datetime import datetime
 
 import pytest
@@ -343,3 +344,39 @@ def test_spot_number_raises_on_invalid_id():
     """spot_number meta ValueError netinkamam vietos ID formatui."""
     with pytest.raises(ValueError):
         spot_number("NEGALIMAS")
+
+
+class _NeverClaimsRepository(InMemoryRepository):
+    """Stub: claim_spot visada grąžina False – imituoja nuolatinę blokavimo nesėkmę."""
+
+    def claim_spot(self, spot_id: str) -> bool:
+        return False
+
+
+def test_claim_spot_always_false_returns_lot_full_not_hang():
+    """Jei claim_spot visada grąžina False, servisas grąžina LOT_FULL, ne kaba amžinai.
+
+    Su senu kodu (while not claim_spot(): assign_spot() be atminties) šis testas
+    kabtų – signal.alarm(2) suveikia per 2 s ir meta TimeoutError.
+    """
+
+    def _on_timeout(signum, frame):
+        raise TimeoutError(
+            "_process_entry kabo – claim_spot visada grąžina False be pabaigos sąlygos"
+        )
+
+    signal.signal(signal.SIGALRM, _on_timeout)
+    signal.alarm(2)
+    try:
+        zones = [Zone(zone_id="A", priority=1)]
+        spots = [
+            Spot(spot_id="A-01", zone_id="A", spot_type=SpotType.STANDARD, distance_to_entrance=10),
+        ]
+        repo = _NeverClaimsRepository(TENANT_A, zones, spots)
+        service = ParkingAllocationService(repo)
+        result = service.process_event(entry("T001"))
+    finally:
+        signal.alarm(0)
+
+    assert result.status == AllocationStatus.REJECTED
+    assert result.error_code == ErrorCode.LOT_FULL

@@ -71,9 +71,12 @@ class ParkingAllocationService:
             vehicle_type=event.vehicle_type,
             has_disability_permit=event.has_disability_permit,
         )
-        spot, is_alternative = self._assign_spot(vehicle, event.preferred_zone)
-        while not self._repository.claim_spot(spot.spot_id):
-            spot, is_alternative = self._assign_spot(vehicle, event.preferred_zone)
+        failed_spot_ids: set[str] = set()
+        while True:
+            spot, is_alternative = self._assign_spot(vehicle, event.preferred_zone, failed_spot_ids)
+            if self._repository.claim_spot(spot.spot_id):
+                break
+            failed_spot_ids.add(spot.spot_id)
 
         self._repository.save_active_parking(
             ActiveParking(plate=event.plate, spot_id=spot.spot_id, zone_id=spot.zone_id)
@@ -89,34 +92,46 @@ class ParkingAllocationService:
 
     # --- spot selection (rules 3 and 4) ---
 
-    def _assign_spot(self, vehicle: Vehicle, preferred_zone: str | None) -> tuple[Spot, bool]:
+    def _assign_spot(
+        self, vehicle: Vehicle, preferred_zone: str | None, excluded_spot_ids: set[str]
+    ) -> tuple[Spot, bool]:
         if preferred_zone is None:
-            spot = self._find_best_spot_globally(vehicle)
+            spot = self._find_best_spot_globally(vehicle, excluded_spot_ids)
             if spot is not None:
                 return spot, False
             raise ParkingError(ErrorCode.LOT_FULL, "Aikštelė pilna, nėra tinkamų laisvų vietų")
 
-        spot = self._find_best_spot(vehicle, preferred_zone)
+        spot = self._find_best_spot(vehicle, preferred_zone, excluded_spot_ids)
         if spot is not None:
             return spot, False
 
         for zone in self._repository.get_zones_by_priority():
             if zone.zone_id == preferred_zone:
                 continue
-            spot = self._find_best_spot(vehicle, zone.zone_id)
+            spot = self._find_best_spot(vehicle, zone.zone_id, excluded_spot_ids)
             if spot is not None:
                 return spot, True
 
         raise ParkingError(ErrorCode.LOT_FULL, "Aikštelė pilna, nėra tinkamų laisvų vietų")
 
-    def _find_best_spot_globally(self, vehicle: Vehicle) -> Spot | None:
+    def _find_best_spot_globally(
+        self, vehicle: Vehicle, excluded_spot_ids: set[str]
+    ) -> Spot | None:
         all_free: list[Spot] = []
         for zone in self._repository.get_zones_by_priority():
             all_free.extend(self._repository.get_free_spots(zone.zone_id))
-        return self._select_best(vehicle, all_free)
+        available = [s for s in all_free if s.spot_id not in excluded_spot_ids]
+        return self._select_best(vehicle, available)
 
-    def _find_best_spot(self, vehicle: Vehicle, zone_id: str) -> Spot | None:
-        return self._select_best(vehicle, self._repository.get_free_spots(zone_id))
+    def _find_best_spot(
+        self, vehicle: Vehicle, zone_id: str, excluded_spot_ids: set[str]
+    ) -> Spot | None:
+        free = [
+            s
+            for s in self._repository.get_free_spots(zone_id)
+            if s.spot_id not in excluded_spot_ids
+        ]
+        return self._select_best(vehicle, free)
 
     def _select_best(self, vehicle: Vehicle, spots: list[Spot]) -> Spot | None:
         preferred = [
