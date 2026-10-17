@@ -459,3 +459,62 @@ tests/__pycache__/*.pyc  (4 failai)
 5. **`httpx` deprecation warning** – `httpx2` dar neišleistas kaip stabilus paketas; šis įspėjimas yra bibliotekų versijų konfliktas, kurį sunku apeiti. Galima dokumentuoti `docs/ai-naudojimas.md`.
 
 6. **API atsakymas grąžina `"error_code": null, "message": null`** sėkminguose atsakymuose (nes `asdict()` serializuoja visus laukus). Tai ne klaida, bet README pavyzdžiai to nerodo.
+
+---
+
+## G. Pataisyta po patikros
+
+### G1. Repozitorijos higiena
+
+Pašalinti iš git stebėjimo su `git rm --cached`:
+- 14 `__pycache__` / `.pyc` failų (`app/`, `tests/` ir jų pakatalogiai).
+- `II-uzduoties-reikalavimai.pdf` šakninėje direktorijoje.
+
+`.gitignore` jau turėjo taisyklingas taisykles (`__pycache__/`, `*.pyc`), tačiau failai buvo įtraukti anksčiau – `git rm --cached` pašalino juos iš indekso neprarandant lokalių kopijų.
+
+### G2. README tikri demonstravimo rezultatai
+
+Pataisyti du neatitikimai (žr. A2):
+- **`free_in_zone`**: 1 žingsnio pavyzdyje pakeista `2` → `5` (zonoje A yra 6 vietos, po pirmo STANDARD priskyrimo lieka 5 laisvos).
+- **Testų skaičius**: pakeista `21 passed` → `24 passed` (dabartinis skaičius).
+
+### G3. Begalinio ciklo apsauga
+
+**Problema (D7 mutantas 2):** `_process_entry` naudojo `while True: claim_spot(...)` be atminties – jei `claim_spot` visada grąžina `False`, ciklas nekada nesibaigia.
+
+**Sprendimas (TDD):**
+
+1. *Raudona:* parašytas testas `test_claim_spot_always_false_returns_lot_full_not_hang` su `signal.alarm(2)` – patvirtino, kad senas kodas kabo.
+2. *Žalia:* `_process_entry` papildyta `failed_spot_ids: set[str]` – nepavykusios vietos į sąrašą, `_assign_spot` jų nebepasiūlo; kai visi kandidatai išsemti, meta `ParkingError(LOT_FULL, ...)`.
+3. *Refaktorinimas:* `signal.alarm` pakeistas skaičiuojančiu stubu `_NeverClaimsRepository` su konstanta `_MAX_CLAIM_ATTEMPTS = 10` – pašalinta priklausomybė nuo `signal` modulio (veikia ir Windows).
+
+**Mutacinė patikra:** testas tikrina `REJECTED / LOT_FULL` ir `claim_spot_call_count == 1` (lygiai tiek, kiek yra tinkamų vietų) – sugautų mutantų skaičius išaugo.
+
+### G4. Filtro perkėlimas į `_select_best`
+
+`s.spot_id not in excluded_spot_ids` filtras kartojosi `_find_best_spot` ir `_find_best_spot_globally`. Perkeltas į `_select_best(vehicle, spots, excluded_spot_ids)`:
+
+```python
+candidates = [s for s in spots if s.spot_id not in excluded_spot_ids]
+```
+
+Abu kvietėjai perduoda neapdorotą sąrašą ir `excluded_spot_ids`; filtravimas vyksta vienoje vietoje. Elgsena nepakito – visi 24 testai praeina.
+
+### G5. Kosmetiniai pataisymai
+
+| # | Failas | Pakeitimas |
+|---|---|---|
+| #1 | `app/api/dependencies.py:29` | HTTP 404 pranešimas `"Tenant '...' not found"` → `"Klientas '...' nerastas"` |
+| #2 | `app/repositories/base.py:29` | `claim_spot` docstring anglų → lietuvių |
+| #4 | `tests/test_allocation.py` | Maginis skaičius `10` → klasės konstanta `_MAX_CLAIM_ATTEMPTS = 10` |
+| #5 | `tests/test_allocation.py`, `tests/test_tenant_isolation.py` | `TS` → `SAMPLE_TIMESTAMP` |
+| #7 | `app/services/parking_allocation.py` | Pašalintos 3 skyrių antraštės: `# --- exit ---`, `# --- entry ---`, `# --- spot selection (rules 3 and 4) ---` |
+| #8 | `app/repositories/postgres.py` | Pašalintos 4 skyrių antraštės: `# --- zone queries ---`, `# --- spot queries ---`, `# --- active parking queries ---`, `# --- conversion ---` |
+| #9 | `tests/test_tenant_isolation.py` | `repo_b_exit(repo_b, plate)` → `exit_vehicle(repo, tenant_id, plate)` |
+
+### G6. Atmesti pasiūlymai
+
+| # | Pasiūlymas | Atmetimo priežastis |
+|---|---|---|
+| #3 | `claim_spot_call_count` → `_claim_spot_call_count` | Atributas skirtas išoriniam nuskaitymui teste (`assert repo.claim_spot_call_count == 1`); privatus atributas būtų skaitomas iš išorės per `repo._claim_spot_call_count`, kas yra blogesnis stilius nei tiesioginis viešas testuojamas atributas. |
+| #6 | `TENANT_A`, `TENANT_B` perkelti į `conftest.py` | Tai domeniniai testų duomenys, ne bendrinama logika; konstantų importas iš `conftest.py` kurtų netiesioginę priklausomybę tarp nesusijusių testų failų ir laikomas bloga praktika. |
